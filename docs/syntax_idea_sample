@@ -1,0 +1,257 @@
+# 値型はcopy. structもとりあえずcopy.
+# Handle ^の内部実装はGenRefの予定.
+# -> T があるなら、最後の式を暗黙return.
+# -> Tがないなら、手続き関数として値を返さない
+# 返り値書いてないならvoid return
+# ASTマクロと、型付きマクロは実装予定
+# async awaitも実装予定
+# ただし重いので、corutine, yieldからかなー？
+# return, continue, breakは必要.
+# ifで別れた先でも暗黙リターンは楽よな
+# インデントはスペースのみ許容
+i
+# struct, own, copyとmove, handleが、メモリ管理の主軸になる予定
+
+# forが遅い言語は終わりなので、頑張りたい
+# ただ、forの実装は後々でいいかな
+trait Iterable[T]:
+    fn iter() -> Iterator[T]
+
+# なにげ重要では
+# ただ、ライフタイム注釈ない場合、保証できないくない？という気はするなー
+# 保証はできなくていいかな。
+# 優先度は、多分思いのほか低めでC ABIとかより後
+struct Slice[T]
+# structに対して付けるやつ。
+# structに副作用与えないことを明示。
+# あくまでコンパイラ最適化。
+# ただ、readついてるときに代入しようとしたらコンルエラー
+fn function(enemy: ^read Enemy):
+    var hp = enemy.hp # ok
+    enemy.hp -= 10 # コンパイルエラー
+# or read ^Enemy とか？
+
+# そもそも、 ^ よりも、viewとか、sharedとかのがいいかもしれん 
+# そもそもとして。
+var x = ...
+let x = ...
+read x
+ref x
+のが、意味論の対応きれいじゃね？^は消して
+# refがデフォgenrefなりptrで、将来的な最適化
+fn take_damage(ref enemy: Enemy):
+    enemy.hp -= 10
+
+fn read_hp(read enemy: Enemy) -> float:
+    enemy.hp
+# 雑だけど、まあこんな感じ。mut, imut識別
+
+# Handle API
+let a = handle.read()
+let ref b = handle.ref()
+# あとそれに際して気づいたんだが、この言語、デフォルトがlet自体readだし、関数の引数デフォルト、書いてないならreadでいいし、省略可能だって気づいた。これは……気持ちいい
+# ていうか、この辺Handleは最適化余地あるし、長期参照はすべてHandleが担える。短期はreadとrefで。これは……世界が鮮やかになっていくなぁ。
+# ownは、所有権をたとえばworldに渡したりするときに必須。間違いない
+
+struct Vec2:
+    x: float
+    y: float
+
+# こうもかけるとか……ありっちゃあり
+struct Vec2 x: float, y: float
+
+impl Vec2:
+    fn len() -> float:
+        sqrt(x * x + y * y)
+
+
+struct Enemy:
+    health: Health
+
+# structを宣言したメンバに宣言したとき、Health.hpじゃなくて、そのままhpとして書ける構文、ありだと思います。
+impl Enemy:
+    fn new() -> Self:
+        Enemy { health: Health.new() }
+
+
+struct Health:
+    max_hp: float
+    hp: float
+
+impl Health:
+    fn new(max_hp: float, hp: float) -> Self:
+        Health { max_hp: max_hp, hp: hp }
+        
+    fn take_damage(amount: float):
+        hp -= amount
+
+struct Connection:
+    id: u32
+    signal: ^Signal
+
+struct Signal[T]
+
+impl Signal[T]:
+    fn connect(func: Fn(T)) -> Connection:
+
+    fn disconnect(Connection):
+
+    fn emit(payload: T):
+        for func in _listners:
+            func(payload)
+
+impl Awaitable[T] for Signal[T]:
+    fn poll() -> AwaitState[T]:
+        # signalがemitされたらReady(payload)
+        # まだならPending
+
+enum Direction:
+    Up
+    Down
+    Left
+    Right
+
+# or, enum Direction: Up, Down, Left, Right
+
+# enum implも可能.
+impl Direction:
+    fn to_str() -> String:
+    #matchが式+ -> T 明示なので、最後の行が暗黙リターン.
+        match self:
+            Direction.Up => "up"
+            Direction.Down => "down"
+            Direction.Left => "left"
+            Direction.Right => "right"
+            # _ => "none" 一応、網羅できてないなら.
+
+# enumとResultは、かなり諸説ありますやるとして相当に後回し.
+enum Result[T]:
+    Some(T)
+    None
+
+enum Result[T, E]:
+    Ok(T)
+    Err(E)
+
+var debug_mode = true
+
+fn main():
+    var a = 12
+    if a == 7 and not a == 4:
+        a += 1
+    else:
+        a -= 1
+    var b = if debug_mode 1.0 else 2.0
+    # 優先度は低いけど欲しいよね. ?と合わせて
+    if var damaged = is_damaged():
+        println("damaged!")
+    else:
+        println("not damaged and not assigned!)
+
+    for i in 1..=10:
+        print(i)
+    if true and false or false:
+        # some
+    while true:
+        break
+
+    var c = loop:
+        break 1
+    
+    var dir: Direction = Direction.Up
+    var dir_txt = Dir.to_str().upper()
+
+    var enemies = vec[Enemy]()
+    var enemies = [enemy1, enemy2] # 暗黙のVec[Enemyとか]
+    var enemy: Enemy = Enemy.new()
+    var dict: Dict[String, String] = {
+        "key": "value",
+    }
+    
+
+    # 型は`Fn(float) -> float`. 返り値あるなら `Fn() -> T`. ないならFn()
+    # 一行のクロージャは、暗黙リターン.
+    # 複数行なら……複数行は返り値必須？それか暗黙リターン？
+    var func = | x: float | x * x
+    var func_print = |enemy: Enemy| print("${enemy} > Gua gua!")
+    let damaged = Signal[T]
+    let func_connect = |ref enemy: Enemy|:
+        damaged.connect(func_print(enemy))
+    func_connect(enemy)
+
+# コンパイル時の
+ソースコード
+↓
+Lexer
+↓
+Parser
+↓
+AST
+↓
+ASTマクロ展開
+↓
+型チェック
+↓
+型付きマクロ / reflection生成
+↓
+IR生成
+↓
+LLVM, VMなど
+
+
+# 実装計画 v0.なんとか
+lexer
+parser
+ast
+ir
+vm
+電卓
+while
+if
+スコープ
+else, elif
+関数
+クロージャ
+
+#
+generics
+for
+
+
+
+# ライブラリとかもまあ、一応妄想
+std.core
+  String, Vec, Dict, Result, Option, Set
+std.io
+   File
+std.json
+  Json
+std.math
+std.ffi
+  CString, RawPointer, int32, uint32, float32, float64, etc...
+
+# GenRefの実装
+gmallocと、gfreeを実装する。
+値型でないものは、基本的にサイズが変わらないstructはheader, datasを持つ。
+# ただ、これはかなり重そうなので後々でもいいかも
+
+struct GenRef[T]:
+    slot_ptr: *Slot[T]
+    generation: u64
+
+struct Pool[T]:
+    chunks: Vec[Chunk[T]]
+    free_list: *Slot[T]
+
+struct Slot[T]:
+    # header
+    generation: u64
+    alive: bool
+    next_free: *Slot[T]
+    # data
+    MaybeUninit[T]
+
+struct Chunk[Enemy]
+    slots: [Slot[Enemy]; 1024]
+
+# StringやVecなどの可変長は例外
