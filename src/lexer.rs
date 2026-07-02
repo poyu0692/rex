@@ -1,9 +1,53 @@
-use crate::diagnostics::{Diagnostic, Span};
+use crate::diagnostics::{Diagnostic, Severity, Span};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexOutput {
     pub tokens: Vec<Token>,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+impl fmt::Display for LexOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "tokens:")?;
+        for token in &self.tokens {
+            writeln!(f, "  {token}")?;
+        }
+
+        if self.diagnostics.is_empty() {
+            return f.write_str("diagnostics: none");
+        }
+
+        writeln!(f, "diagnostics:")?;
+        for diagnostic in &self.diagnostics {
+            writeln!(
+                f,
+                "  {}[{}] {} at {}..{}",
+                severity_label(diagnostic.severity),
+                diagnostic.code,
+                diagnostic.message,
+                diagnostic.span.start,
+                diagnostic.span.end
+            )?;
+
+            for note in &diagnostic.notes {
+                match note.span {
+                    Some(span) => {
+                        writeln!(
+                            f,
+                            "    note: {} at {}..{}",
+                            note.message, span.start, span.end
+                        )?;
+                    }
+                    None => {
+                        writeln!(f, "    note: {}", note.message)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub fn lex(source: &str) -> LexOutput {
@@ -14,6 +58,12 @@ pub fn lex(source: &str) -> LexOutput {
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}..{} {}", self.span.start, self.span.end, self.kind)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,6 +118,53 @@ pub enum Keyword {
     Yield,
 }
 
+impl Keyword {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::And => "and",
+            Self::Async => "async",
+            Self::Await => "await",
+            Self::Break => "break",
+            Self::Continue => "continue",
+            Self::Copy => "copy",
+            Self::Elif => "elif",
+            Self::Else => "else",
+            Self::Enum => "enum",
+            Self::False => "false",
+            Self::Fn => "fn",
+            Self::For => "for",
+            Self::Handle => "handle",
+            Self::If => "if",
+            Self::Impl => "impl",
+            Self::In => "in",
+            Self::Let => "let",
+            Self::Loop => "loop",
+            Self::Match => "match",
+            Self::Move => "move",
+            Self::Not => "not",
+            Self::Or => "or",
+            Self::Own => "own",
+            Self::Read => "read",
+            Self::Ref => "ref",
+            Self::Return => "return",
+            Self::SelfType => "Self",
+            Self::SelfValue => "self",
+            Self::Struct => "struct",
+            Self::Trait => "trait",
+            Self::True => "true",
+            Self::Var => "var",
+            Self::While => "while",
+            Self::Yield => "yield",
+        }
+    }
+}
+
+impl fmt::Display for Keyword {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Symbol {
     Ampersand,
@@ -104,6 +201,70 @@ pub enum Symbol {
     Star,
     StarEqual,
     ThinArrow,
+}
+
+impl Symbol {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ampersand => "&",
+            Self::Bang => "!",
+            Self::BangEqual => "!=",
+            Self::Caret => "^",
+            Self::Colon => ":",
+            Self::Comma => ",",
+            Self::Dot => ".",
+            Self::Equal => "=",
+            Self::EqualEqual => "==",
+            Self::FatArrow => "=>",
+            Self::Greater => ">",
+            Self::GreaterEqual => ">=",
+            Self::LBrace => "{",
+            Self::LBracket => "[",
+            Self::Less => "<",
+            Self::LessEqual => "<=",
+            Self::LParen => "(",
+            Self::Minus => "-",
+            Self::MinusEqual => "-=",
+            Self::Percent => "%",
+            Self::PercentEqual => "%=",
+            Self::Pipe => "|",
+            Self::Plus => "+",
+            Self::PlusEqual => "+=",
+            Self::Question => "?",
+            Self::RBrace => "}",
+            Self::RBracket => "]",
+            Self::RParen => ")",
+            Self::Semicolon => ";",
+            Self::Slash => "/",
+            Self::SlashEqual => "/=",
+            Self::Star => "*",
+            Self::StarEqual => "*=",
+            Self::ThinArrow => "->",
+        }
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Identifier(name) => write!(f, "identifier `{name}`"),
+            Self::Integer(value) => write!(f, "integer `{value}`"),
+            Self::Float(value) => write!(f, "float `{value}`"),
+            Self::String(value) => write!(f, "string {value:?}"),
+            Self::Keyword(keyword) => write!(f, "`{keyword}`"),
+            Self::Symbol(symbol) => write!(f, "`{symbol}`"),
+            Self::Newline => f.write_str("newline"),
+            Self::Indent => f.write_str("indent"),
+            Self::Dedent => f.write_str("dedent"),
+            Self::Eof => f.write_str("end of file"),
+        }
+    }
 }
 
 struct Lexer<'a> {
@@ -542,6 +703,14 @@ fn is_identifier_continue(ch: char) -> bool {
     is_identifier_start(ch) || ch.is_ascii_digit()
 }
 
+fn severity_label(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Note => "note",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -608,6 +777,33 @@ mod tests {
                 TokenKind::Symbol(Symbol::Colon),
             ]
         );
+    }
+
+    #[test]
+    fn displays_token_kinds_for_development_output() {
+        assert_eq!(Keyword::Struct.to_string(), "struct");
+        assert_eq!(Symbol::ThinArrow.to_string(), "->");
+        assert_eq!(
+            TokenKind::Identifier("enemy".into()).to_string(),
+            "identifier `enemy`"
+        );
+        assert_eq!(TokenKind::Keyword(Keyword::Fn).to_string(), "`fn`");
+        assert_eq!(TokenKind::Symbol(Symbol::FatArrow).to_string(), "`=>`");
+        assert_eq!(
+            TokenKind::String("a\nb".into()).to_string(),
+            "string \"a\\nb\""
+        );
+    }
+
+    #[test]
+    fn displays_lex_output_for_development_output() {
+        let rendered = lex("var x = \"unterminated\n").to_string();
+
+        assert!(rendered.contains("tokens:"));
+        assert!(rendered.contains("0..3 `var`"));
+        assert!(rendered.contains("4..5 identifier `x`"));
+        assert!(rendered.contains("diagnostics:"));
+        assert!(rendered.contains("error[lex.unterminated_string]"));
     }
 
     #[test]
