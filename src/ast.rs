@@ -280,6 +280,7 @@ impl Stmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StmtKind {
     Expr(ExprId),
+    Print(ExprId),
     Error(Error),
 }
 
@@ -391,7 +392,7 @@ mod tests {
         let param_ty = TypeRef::named("Enemy", Span::new(16, 21));
         let return_ty = TypeRef::named("float", Span::new(26, 31));
         let body_expr = ast.push_expr(integer("1", Span::new(37, 38)));
-        let body_stmt = ast.push_stmt(Stmt::new(StmtKind::Expr(body_expr), Span::new(37, 38)));
+        let body_stmt = ast.push_stmt(Stmt::new(StmtKind::Print(body_expr), Span::new(31, 38)));
         let function = ast.push_item(Item::new(
             ItemKind::Function(Function::new(
                 Ident::new("read_hp", Span::new(3, 10)),
@@ -422,6 +423,6 @@ mod tests {
             panic!("item should be a function");
         };
         assert_eq!(function.body, vec![body_stmt]);
-        assert_eq!(ast.stmt(body_stmt).kind, StmtKind::Expr(body_expr));
+        assert_eq!(ast.stmt(body_stmt).kind, StmtKind::Print(body_expr));
     }
 }
