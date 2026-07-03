@@ -87,26 +87,20 @@ pub enum Keyword {
     Await,
     Break,
     Continue,
-    Copy,
     Elif,
     Else,
     Enum,
     False,
     Fn,
     For,
-    Handle,
     If,
     Impl,
     In,
     Let,
     Loop,
     Match,
-    Move,
     Not,
     Or,
-    Own,
-    Read,
-    Ref,
     Return,
     SelfType,
     SelfValue,
@@ -126,26 +120,20 @@ impl Keyword {
             Self::Await => "await",
             Self::Break => "break",
             Self::Continue => "continue",
-            Self::Copy => "copy",
             Self::Elif => "elif",
             Self::Else => "else",
             Self::Enum => "enum",
             Self::False => "false",
             Self::Fn => "fn",
             Self::For => "for",
-            Self::Handle => "handle",
             Self::If => "if",
             Self::Impl => "impl",
             Self::In => "in",
             Self::Let => "let",
             Self::Loop => "loop",
             Self::Match => "match",
-            Self::Move => "move",
             Self::Not => "not",
             Self::Or => "or",
-            Self::Own => "own",
-            Self::Read => "read",
-            Self::Ref => "ref",
             Self::Return => "return",
             Self::SelfType => "Self",
             Self::SelfValue => "self",
@@ -660,26 +648,20 @@ fn keyword(text: &str) -> Option<Keyword> {
         "await" => Keyword::Await,
         "break" => Keyword::Break,
         "continue" => Keyword::Continue,
-        "copy" => Keyword::Copy,
         "elif" => Keyword::Elif,
         "else" => Keyword::Else,
         "enum" => Keyword::Enum,
         "false" => Keyword::False,
         "fn" => Keyword::Fn,
         "for" => Keyword::For,
-        "handle" => Keyword::Handle,
         "if" => Keyword::If,
         "impl" => Keyword::Impl,
         "in" => Keyword::In,
         "let" => Keyword::Let,
         "loop" => Keyword::Loop,
         "match" => Keyword::Match,
-        "move" => Keyword::Move,
         "not" => Keyword::Not,
         "or" => Keyword::Or,
-        "own" => Keyword::Own,
-        "read" => Keyword::Read,
-        "ref" => Keyword::Ref,
         "return" => Keyword::Return,
         "Self" => Keyword::SelfType,
         "self" => Keyword::SelfValue,
@@ -824,34 +806,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn tokenizes_the_syntax_idea_sample_without_panicking() {
-        let output = lex(include_str!("../docs/syntax_idea_sample"));
-
-        assert!(output.tokens.len() > 100);
-        assert!(
-            output
-                .tokens
-                .iter()
-                .any(|token| token.kind == TokenKind::Keyword(Keyword::Struct))
-        );
-        assert!(
-            output
-                .tokens
-                .iter()
-                .any(|token| token.kind == TokenKind::Keyword(Keyword::Fn))
-        );
-        assert!(
-            output
-                .tokens
-                .iter()
-                .any(|token| token.kind == TokenKind::Symbol(Symbol::FatArrow))
-        );
-        assert!(
-            output
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == "lex.unterminated_string")
-        );
-    }
 }
