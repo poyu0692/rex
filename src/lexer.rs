@@ -805,5 +805,4 @@ mod tests {
                 .any(|token| token.kind == TokenKind::Keyword(Keyword::Var))
         );
     }
-
 }
