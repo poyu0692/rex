@@ -280,8 +280,32 @@ impl Stmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StmtKind {
     Expr(ExprId),
+    Local(Local),
     Print(ExprId),
     Error(Error),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Local {
+    pub kind: BindingKind,
+    pub name: Ident,
+    pub initializer: ExprId,
+}
+
+impl Local {
+    pub fn new(kind: BindingKind, name: Ident, initializer: ExprId) -> Self {
+        Self {
+            kind,
+            name,
+            initializer,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingKind {
+    Let,
+    Var,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -298,6 +322,7 @@ impl Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExprKind {
+    Ident(Ident),
     Number(NumberLiteral),
     Unary {
         op: UnaryOp,

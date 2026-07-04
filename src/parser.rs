@@ -1,6 +1,6 @@
 use crate::ast::{
-    Ast, BinaryOp, Error, Expr, ExprId, ExprKind, Function, Ident, Item, ItemKind, Module,
-    NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
+    Ast, BinaryOp, BindingKind, Error, Expr, ExprId, ExprKind, Function, Ident, Item, ItemKind,
+    Local, Module, NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, LexOutput, Symbol, Token, TokenKind};
@@ -125,7 +125,9 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> StmtId {
         self.skip_newlines();
-        let stmt = if self.at_identifier("print") {
+        let stmt = if self.at_keyword(Keyword::Let) || self.at_keyword(Keyword::Var) {
+            self.parse_local_stmt()
+        } else if self.at_identifier("print") {
             let start = self.advance().span.start;
             let expr = self.parse_expr();
             let span = Span::new(start, self.ast.expr(expr).span.end);
@@ -139,6 +141,21 @@ impl Parser {
         let id = self.ast.push_stmt(stmt);
         self.finish_stmt();
         id
+    }
+
+    fn parse_local_stmt(&mut self) -> Stmt {
+        let token = self.advance();
+        let kind = match token.kind {
+            TokenKind::Keyword(Keyword::Let) => BindingKind::Let,
+            TokenKind::Keyword(Keyword::Var) => BindingKind::Var,
+            _ => unreachable!("caller checked for a local binding keyword"),
+        };
+        let name = self.expect_identifier("expected variable name");
+        self.expect_symbol(Symbol::Equal, "expected `=` after variable name");
+        let initializer = self.parse_expr();
+        let span = Span::new(token.span.start, self.ast.expr(initializer).span.end);
+
+        Stmt::new(StmtKind::Local(Local::new(kind, name, initializer)), span)
     }
 
     fn parse_expr(&mut self) -> ExprId {
@@ -181,6 +198,13 @@ impl Parser {
                 self.advance();
                 self.ast.push_expr(Expr::new(
                     ExprKind::Number(NumberLiteral::Float(value)),
+                    token.span,
+                ))
+            }
+            TokenKind::Identifier(text) => {
+                self.advance();
+                self.ast.push_expr(Expr::new(
+                    ExprKind::Ident(Ident::new(text, token.span)),
                     token.span,
                 ))
             }
@@ -470,6 +494,43 @@ mod tests {
                 op: UnaryOp::Neg,
                 ..
             }
+        ));
+    }
+
+    #[test]
+    fn parses_local_bindings_and_identifier_expressions() {
+        let output =
+            parse_source("fn main():\n    var x = 1 + 2\n    let y = x * 3\n    print y\n");
+
+        assert!(output.diagnostics.is_empty());
+        let function = only_function(&output);
+        assert_eq!(function.body.len(), 3);
+
+        let StmtKind::Local(local) = &output.ast.stmt(function.body[0]).kind else {
+            panic!("expected local binding");
+        };
+        assert_eq!(local.kind, BindingKind::Var);
+        assert_eq!(local.name.text, "x");
+        assert!(matches!(
+            output.ast.expr(local.initializer).kind,
+            ExprKind::Binary {
+                op: BinaryOp::Add,
+                ..
+            }
+        ));
+
+        let StmtKind::Local(local) = &output.ast.stmt(function.body[1]).kind else {
+            panic!("expected local binding");
+        };
+        assert_eq!(local.kind, BindingKind::Let);
+        assert_eq!(local.name.text, "y");
+
+        let StmtKind::Print(expr) = output.ast.stmt(function.body[2]).kind else {
+            panic!("expected print statement");
+        };
+        assert!(matches!(
+            &output.ast.expr(expr).kind,
+            ExprKind::Ident(ident) if ident.text == "y"
         ));
     }
 
