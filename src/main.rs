@@ -1,5 +1,5 @@
 use rex::diagnostics::Severity;
-use rex::{lexer, parser};
+use rex::{lexer, name_resolver, parser};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
@@ -51,6 +51,38 @@ fn main() -> ExitCode {
             println!("{:#?}", output.ast);
             exit_for_diagnostics(&output.diagnostics)
         }
+        "resolve" => {
+            let lexed = lexer::lex(&source);
+            let parsed = parser::parse(lexed);
+            let resolved = name_resolver::resolve(&parsed.ast);
+            println!("parse diagnostics:");
+            if parsed.diagnostics.is_empty() {
+                println!("  none");
+            } else {
+                for diagnostic in &parsed.diagnostics {
+                    println!("  {diagnostic:?}");
+                }
+            }
+            println!("resolve diagnostics:");
+            if resolved.diagnostics.is_empty() {
+                println!("  none");
+            } else {
+                for diagnostic in &resolved.diagnostics {
+                    println!("  {diagnostic:?}");
+                }
+            }
+            println!("symbols:");
+            println!("{:#?}", resolved.symbols);
+            println!("resolved names:");
+            println!("{:#?}", resolved.resolved_names);
+
+            let status = exit_for_diagnostics(&parsed.diagnostics);
+            if status == ExitCode::SUCCESS {
+                exit_for_diagnostics(&resolved.diagnostics)
+            } else {
+                status
+            }
+        }
         _ => {
             eprintln!("unknown command `{command}`");
             print_usage();
@@ -74,4 +106,5 @@ fn print_usage() {
     eprintln!("usage:");
     eprintln!("  rex lex <source>");
     eprintln!("  rex parse <source>");
+    eprintln!("  rex resolve <source>");
 }
