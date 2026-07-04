@@ -1,6 +1,6 @@
 use crate::ast::{
-    Ast, BinaryOp, BindingKind, Error, Expr, ExprId, ExprKind, Function, Ident, Item, ItemKind,
-    Local, Module, NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
+    Ast, BinaryOp, BindingKind, Error, Expr, ExprId, ExprKind, Function, Ident, Item, ItemId,
+    ItemKind, Local, Module, ModuleId, NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, LexOutput, Symbol, Token, TokenKind};
@@ -42,7 +42,7 @@ impl Parser {
         }
     }
 
-    fn parse_module(&mut self) -> crate::ast::ModuleId {
+    fn parse_module(&mut self) -> ModuleId {
         self.skip_newlines();
         let start = self.current().span.start;
         let mut items = Vec::new();
@@ -61,7 +61,7 @@ impl Parser {
             .push_module(Module::new(items, Span::new(start, end)))
     }
 
-    fn parse_item(&mut self) -> crate::ast::ItemId {
+    fn parse_item(&mut self) -> ItemId {
         if self.at_keyword(Keyword::Fn) {
             return self.parse_function_item();
         }
@@ -73,7 +73,7 @@ impl Parser {
             .push_item(Item::new(ItemKind::Error(Error::new()), span))
     }
 
-    fn parse_function_item(&mut self) -> crate::ast::ItemId {
+    fn parse_function_item(&mut self) -> ItemId {
         let start = self.expect_keyword(Keyword::Fn).span.start;
         let name = self.expect_identifier("expected function name");
 
