@@ -1,5 +1,5 @@
 use rex::diagnostics::Severity;
-use rex::{lexer, name_resolver, parser};
+use rex::{lexer, lowering, name_resolver, parser};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
@@ -83,6 +83,48 @@ fn main() -> ExitCode {
                 status
             }
         }
+        "hir" => {
+            let lexed = lexer::lex(&source);
+            let parsed = parser::parse(lexed);
+            let resolved = name_resolver::resolve(&parsed.ast);
+            let lowered = lowering::lower(&parsed.ast, &resolved);
+            println!("parse diagnostics:");
+            if parsed.diagnostics.is_empty() {
+                println!("  none");
+            } else {
+                for diagnostic in &parsed.diagnostics {
+                    println!("  {diagnostic:?}");
+                }
+            }
+            println!("resolve diagnostics:");
+            if resolved.diagnostics.is_empty() {
+                println!("  none");
+            } else {
+                for diagnostic in &resolved.diagnostics {
+                    println!("  {diagnostic:?}");
+                }
+            }
+            println!("lower diagnostics:");
+            if lowered.diagnostics.is_empty() {
+                println!("  none");
+            } else {
+                for diagnostic in &lowered.diagnostics {
+                    println!("  {diagnostic:?}");
+                }
+            }
+            println!("hir:");
+            println!("{:#?}", lowered.hir);
+
+            let status = exit_for_diagnostics(&parsed.diagnostics);
+            if status != ExitCode::SUCCESS {
+                return status;
+            }
+            let status = exit_for_diagnostics(&resolved.diagnostics);
+            if status != ExitCode::SUCCESS {
+                return status;
+            }
+            exit_for_diagnostics(&lowered.diagnostics)
+        }
         _ => {
             eprintln!("unknown command `{command}`");
             print_usage();
@@ -107,4 +149,5 @@ fn print_usage() {
     eprintln!("  rex lex <source>");
     eprintln!("  rex parse <source>");
     eprintln!("  rex resolve <source>");
+    eprintln!("  rex hir <source>");
 }

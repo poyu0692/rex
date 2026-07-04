@@ -15,6 +15,34 @@ pub struct Symbols {
     pub locals: Vec<LocalSymbol>,
 }
 
+impl Symbols {
+    pub fn function(&self, id: FunctionId) -> &FunctionSymbol {
+        self.functions
+            .get(id.index())
+            .expect("invalid function symbol id")
+    }
+
+    pub fn local(&self, id: LocalId) -> &LocalSymbol {
+        self.locals
+            .get(id.index())
+            .expect("invalid local symbol id")
+    }
+
+    pub fn function_id_for_item(&self, item: ItemId) -> Option<FunctionId> {
+        self.functions
+            .iter()
+            .position(|function| function.item == item)
+            .map(FunctionId)
+    }
+
+    pub fn local_id_for_stmt(&self, stmt: StmtId) -> Option<LocalId> {
+        self.locals
+            .iter()
+            .position(|local| local.source == LocalSource::Stmt(stmt))
+            .map(LocalId)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSymbol {
     pub name: Ident,
