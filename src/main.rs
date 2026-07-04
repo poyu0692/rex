@@ -37,7 +37,8 @@ fn main() -> ExitCode {
             exit_for_diagnostics(&output.diagnostics)
         }
         "parse" => {
-            let output = parser::parse(&source);
+            let lexed = lexer::lex(&source);
+            let output = parser::parse(lexed);
             println!("diagnostics:");
             if output.diagnostics.is_empty() {
                 println!("  none");

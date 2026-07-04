@@ -3,7 +3,7 @@ use crate::ast::{
     NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
-use crate::lexer::{Keyword, Symbol, Token, TokenKind, lex};
+use crate::lexer::{Keyword, LexOutput, Symbol, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseOutput {
@@ -11,9 +11,8 @@ pub struct ParseOutput {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub fn parse(source: &str) -> ParseOutput {
-    let output = lex(source);
-    Parser::new(output.tokens, output.diagnostics).parse()
+pub fn parse(input: LexOutput) -> ParseOutput {
+    Parser::new(input.tokens, input.diagnostics).parse()
 }
 
 struct Parser {
@@ -406,10 +405,11 @@ fn merge_spans(lhs: Span, rhs: Span) -> Span {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lexer::lex;
 
     #[test]
     fn parses_function_with_temporary_print_statement() {
-        let output = parse("fn main():\n    print 1 + 2 * 3\n");
+        let output = parse_source("fn main():\n    print 1 + 2 * 3\n");
 
         assert!(output.diagnostics.is_empty());
         let module = output.ast.root().expect("root module");
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn parses_unary_minus_with_higher_precedence_than_addition() {
-        let output = parse("fn main():\n    print -1 + 2\n");
+        let output = parse_source("fn main():\n    print -1 + 2\n");
 
         assert!(output.diagnostics.is_empty());
         let function = only_function(&output);
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn reports_invalid_top_level_tokens() {
-        let output = parse("1 + 2\n");
+        let output = parse_source("1 + 2\n");
 
         assert!(
             output
@@ -483,6 +483,10 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.code == "parse.expected_item")
         );
+    }
+
+    fn parse_source(source: &str) -> ParseOutput {
+        parse(lex(source))
     }
 
     fn only_function(output: &ParseOutput) -> &Function {
