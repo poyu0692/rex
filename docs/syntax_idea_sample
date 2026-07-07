@@ -161,6 +161,7 @@ fn main():
     var dir: Direction = Direction::Up
     var dir_txt = dir.to_str().upper()
 
+   #var enemies = Vec<Enemy>::new()
     var enemies = Vec[Enemy]::new()
     var enemies = [enemy1, enemy2] # 暗黙のVec[Enemyとか]
     var enemy: Enemy = Enemy::new()
