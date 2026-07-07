@@ -289,14 +289,16 @@ pub enum StmtKind {
 pub struct Local {
     pub kind: BindingKind,
     pub name: Ident,
+    pub ty: Option<TypeRef>,
     pub initializer: ExprId,
 }
 
 impl Local {
-    pub fn new(kind: BindingKind, name: Ident, initializer: ExprId) -> Self {
+    pub fn new(kind: BindingKind, name: Ident, ty: Option<TypeRef>, initializer: ExprId) -> Self {
         Self {
             kind,
             name,
+            ty,
             initializer,
         }
     }

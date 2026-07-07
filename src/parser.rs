@@ -1,6 +1,7 @@
 use crate::ast::{
     Ast, BinaryOp, BindingKind, Error, Expr, ExprId, ExprKind, Function, Ident, Item, ItemId,
-    ItemKind, Local, Module, ModuleId, NumberLiteral, Stmt, StmtId, StmtKind, UnaryOp,
+    ItemKind, Local, Module, ModuleId, NumberLiteral, Param, Stmt, StmtId, StmtKind, TypeRef,
+    TypeRefKind, UnaryOp,
 };
 use crate::diagnostics::{Diagnostic, Span};
 use crate::lexer::{Keyword, LexOutput, Symbol, Token, TokenKind};
@@ -78,20 +79,14 @@ impl Parser {
         let name = self.expect_identifier("expected function name");
 
         self.expect_symbol(Symbol::LParen, "expected `(` after function name");
-        if !self.at_symbol(Symbol::RParen) {
-            self.error(
-                "parse.unsupported_params",
-                "function parameters are not parsed yet",
-                self.current().span,
-            );
-            self.synchronize_until(&[
-                TokenStop::Symbol(Symbol::RParen),
-                TokenStop::Symbol(Symbol::Colon),
-                TokenStop::Newline,
-                TokenStop::Eof,
-            ]);
-        }
+        let params = self.parse_param_list();
         self.expect_symbol(Symbol::RParen, "expected `)` after function parameters");
+        let return_type =
+            if self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::ThinArrow))) {
+                Some(self.parse_type_ref())
+            } else {
+                None
+            };
         self.expect_symbol(Symbol::Colon, "expected `:` after function signature");
         self.expect_newline("expected newline after function signature");
 
@@ -118,9 +113,34 @@ impl Parser {
             .map(|stmt| self.ast.stmt(*stmt).span.end)
             .unwrap_or(name.span.end);
         self.ast.push_item(Item::new(
-            ItemKind::Function(Function::new(name, Vec::new(), None, body)),
+            ItemKind::Function(Function::new(name, params, return_type, body)),
             Span::new(start, end),
         ))
+    }
+
+    fn parse_param_list(&mut self) -> Vec<Param> {
+        let mut params = Vec::new();
+
+        while !self.at_param_list_end() {
+            let name = self.expect_identifier("expected parameter name");
+            let ty = if self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::Colon))) {
+                Some(self.parse_type_ref())
+            } else {
+                self.error(
+                    "parse.expected_param_type",
+                    "expected `:` and parameter type after parameter name",
+                    self.current().span,
+                );
+                None
+            };
+            params.push(Param::new(name, ty));
+
+            if !self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::Comma))) {
+                break;
+            }
+        }
+
+        params
     }
 
     fn parse_stmt(&mut self) -> StmtId {
@@ -151,11 +171,69 @@ impl Parser {
             _ => unreachable!("caller checked for a local binding keyword"),
         };
         let name = self.expect_identifier("expected variable name");
+        let ty = if self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::Colon))) {
+            Some(self.parse_type_ref())
+        } else {
+            None
+        };
         self.expect_symbol(Symbol::Equal, "expected `=` after variable name");
         let initializer = self.parse_expr();
         let span = Span::new(token.span.start, self.ast.expr(initializer).span.end);
 
-        Stmt::new(StmtKind::Local(Local::new(kind, name, initializer)), span)
+        Stmt::new(
+            StmtKind::Local(Local::new(kind, name, ty, initializer)),
+            span,
+        )
+    }
+
+    fn parse_type_ref(&mut self) -> TypeRef {
+        let token = self.current().clone();
+        let mut ty = match token.kind {
+            TokenKind::Identifier(text) => {
+                self.advance();
+                TypeRef::named_ident(Ident::new(text, token.span))
+            }
+            TokenKind::Keyword(Keyword::SelfType) => {
+                self.advance();
+                TypeRef::named_ident(Ident::new("Self", token.span))
+            }
+            _ => {
+                self.error("parse.expected_type", "expected type", token.span);
+                if !matches!(
+                    token.kind,
+                    TokenKind::Newline | TokenKind::Dedent | TokenKind::Eof
+                ) {
+                    self.advance();
+                }
+                TypeRef::named("<error>", token.span)
+            }
+        };
+
+        while self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::LBracket))) {
+            let mut args = Vec::new();
+            while !self.at_type_arg_list_end() {
+                args.push(self.parse_type_ref());
+                if !self.match_token(|kind| matches!(kind, TokenKind::Symbol(Symbol::Comma))) {
+                    break;
+                }
+            }
+
+            let end = self
+                .expect_symbol(Symbol::RBracket, "expected `]` after type arguments")
+                .map(|token| token.span.end)
+                .or_else(|| args.last().map(|arg| arg.span.end))
+                .unwrap_or(ty.span.end);
+            let span = Span::new(ty.span.start, end);
+            ty = TypeRef::new(
+                TypeRefKind::Generic {
+                    base: Box::new(ty),
+                    args,
+                },
+                span,
+            );
+        }
+
+        ty
     }
 
     fn parse_expr(&mut self) -> ExprId {
@@ -295,12 +373,6 @@ impl Parser {
         self.match_token(|kind| matches!(kind, TokenKind::Dedent));
     }
 
-    fn synchronize_until(&mut self, stops: &[TokenStop]) {
-        while !self.at_eof() && !stops.iter().any(|stop| stop.matches(self.current())) {
-            self.advance();
-        }
-    }
-
     fn expect_keyword(&mut self, keyword: Keyword) -> Token {
         if self.at_keyword(keyword) {
             return self.advance();
@@ -365,6 +437,18 @@ impl Parser {
         matches!(self.current().kind, TokenKind::Symbol(current) if current == symbol)
     }
 
+    fn at_param_list_end(&self) -> bool {
+        self.at_eof()
+            || self.at_symbol(Symbol::RParen)
+            || self.at_token(|kind| matches!(kind, TokenKind::Newline))
+    }
+
+    fn at_type_arg_list_end(&self) -> bool {
+        self.at_eof()
+            || self.at_symbol(Symbol::RBracket)
+            || self.at_token(|kind| matches!(kind, TokenKind::Newline))
+    }
+
     fn at_token(&self, predicate: impl FnOnce(&TokenKind) -> bool) -> bool {
         predicate(&self.current().kind)
     }
@@ -400,25 +484,6 @@ impl Parser {
     fn error(&mut self, code: &'static str, message: impl Into<String>, span: Span) {
         self.diagnostics
             .push(Diagnostic::error(code, message, span));
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum TokenStop {
-    Symbol(Symbol),
-    Newline,
-    Eof,
-}
-
-impl TokenStop {
-    fn matches(self, token: &Token) -> bool {
-        match self {
-            Self::Symbol(expected) => {
-                matches!(token.kind, TokenKind::Symbol(current) if current == expected)
-            }
-            Self::Newline => matches!(token.kind, TokenKind::Newline),
-            Self::Eof => matches!(token.kind, TokenKind::Eof),
-        }
     }
 }
 
@@ -511,6 +576,7 @@ mod tests {
         };
         assert_eq!(local.kind, BindingKind::Var);
         assert_eq!(local.name.text, "x");
+        assert_eq!(local.ty, None);
         assert!(matches!(
             output.ast.expr(local.initializer).kind,
             ExprKind::Binary {
@@ -524,6 +590,7 @@ mod tests {
         };
         assert_eq!(local.kind, BindingKind::Let);
         assert_eq!(local.name.text, "y");
+        assert_eq!(local.ty, None);
 
         let StmtKind::Print(expr) = output.ast.stmt(function.body[2]).kind else {
             panic!("expected print statement");
@@ -532,6 +599,63 @@ mod tests {
             &output.ast.expr(expr).kind,
             ExprKind::Ident(ident) if ident.text == "y"
         ));
+    }
+
+    #[test]
+    fn parses_function_parameter_and_return_types() {
+        let output = parse_source("fn add(x: int, y: float) -> float:\n    print x\n");
+
+        assert!(output.diagnostics.is_empty());
+        let function = only_function(&output);
+
+        assert_eq!(function.params.len(), 2);
+        assert_eq!(function.params[0].name.text, "x");
+        assert_eq!(
+            named_type_text(function.params[0].ty.as_ref().expect("param type")),
+            "int"
+        );
+        assert_eq!(function.params[1].name.text, "y");
+        assert_eq!(
+            named_type_text(function.params[1].ty.as_ref().expect("param type")),
+            "float"
+        );
+        assert_eq!(
+            named_type_text(function.return_type.as_ref().expect("return type")),
+            "float"
+        );
+    }
+
+    #[test]
+    fn parses_local_type_annotations() {
+        let output = parse_source("fn main():\n    var enemy: Enemy = 1\n");
+
+        assert!(output.diagnostics.is_empty());
+        let function = only_function(&output);
+        let StmtKind::Local(local) = &output.ast.stmt(function.body[0]).kind else {
+            panic!("expected local binding");
+        };
+
+        assert_eq!(local.name.text, "enemy");
+        assert_eq!(
+            named_type_text(local.ty.as_ref().expect("local type")),
+            "Enemy"
+        );
+    }
+
+    #[test]
+    fn parses_generic_type_refs() {
+        let output = parse_source("fn main(values: Vec[int]):\n    print values\n");
+
+        assert!(output.diagnostics.is_empty());
+        let function = only_function(&output);
+        let ty = function.params[0].ty.as_ref().expect("param type");
+
+        let TypeRefKind::Generic { base, args } = &ty.kind else {
+            panic!("expected generic type");
+        };
+        assert_eq!(named_type_text(base), "Vec");
+        assert_eq!(args.len(), 1);
+        assert_eq!(named_type_text(&args[0]), "int");
     }
 
     #[test]
@@ -556,5 +680,12 @@ mod tests {
             panic!("expected function item");
         };
         function
+    }
+
+    fn named_type_text(ty: &TypeRef) -> &str {
+        let TypeRefKind::Named(name) = &ty.kind else {
+            panic!("expected named type");
+        };
+        &name.text
     }
 }
