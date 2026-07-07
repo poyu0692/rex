@@ -71,7 +71,7 @@ struct Enemy:
 # structを宣言したメンバに宣言したとき、Health.hpじゃなくて、そのままhpとして書ける構文、ありだと思います。
 impl Enemy:
     fn new() -> Self:
-        Enemy { health: Health.new() }
+        Enemy { health: Health::new() }
 
 
 struct Health:
@@ -118,10 +118,10 @@ impl Direction:
     fn to_str() -> String:
     #matchが式+ -> T 明示なので、最後の行が暗黙リターン.
         match self:
-            Direction.Up => "up"
-            Direction.Down => "down"
-            Direction.Left => "left"
-            Direction.Right => "right"
+            Direction::Up => "up"
+            Direction::Down => "down"
+            Direction::Left => "left"
+            Direction::Right => "right"
             # _ => "none" 一応、網羅できてないなら.
 
 # enumとResultは、かなり諸説ありますやるとして相当に後回し.
@@ -158,12 +158,12 @@ fn main():
     var c = loop:
         break 1
     
-    var dir: Direction = Direction.Up
-    var dir_txt = Dir.to_str().upper()
+    var dir: Direction = Direction::Up
+    var dir_txt = dir.to_str().upper()
 
-    var enemies = vec[Enemy]()
+    var enemies = Vec[Enemy]::new()
     var enemies = [enemy1, enemy2] # 暗黙のVec[Enemyとか]
-    var enemy: Enemy = Enemy.new()
+    var enemy: Enemy = Enemy::new()
     var dict: Dict[String, String] = {
         "key": "value",
     }
